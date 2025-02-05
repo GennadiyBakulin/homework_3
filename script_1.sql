@@ -18,3 +18,35 @@
 --Пример:
 --execute 'select * from product where product_type = $1 and is_company = $2' using 'credit', false;
 
+do
+$$
+    declare
+        result_row record;
+        table_name varchar;
+    begin
+        for result_row in (select product_type, is_company from bid group by product_type, is_company)
+            loop
+                if result_row.is_company then
+                    table_name := 'company_' || result_row.product_type;
+                else
+                    table_name := 'person_' || result_row.product_type;
+                end if;
+                execute
+                    format(
+                            'create table %I
+                            (
+                            id serial primary key,
+                            client_name varchar(50) not null,
+                            amount numeric not null
+                            )',
+                            table_name);
+
+                execute
+                    'insert into ' || table_name || '(client_name, amount)
+                     select client_name, amount
+                     from bid
+                     where product_type = ' || quote_literal(result_row.product_type) ||
+                    ' and is_company = ' || result_row.is_company;
+            end loop;
+    end;
+$$
